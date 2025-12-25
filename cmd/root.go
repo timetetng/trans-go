@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -48,17 +49,37 @@ var rootCmd = &cobra.Command{
 		// 2. 处理 Model (-m)
 		if cmd.Flags().Changed("model") {
 			handleModel(flagModel)
-			if len(args) == 0 {
-				return
+		}
+
+		// 3. 获取输入文本 (优先使用参数，否则读取 Stdin)
+		var text string
+		if len(args) > 0 {
+			text = strings.Join(args, " ")
+		} else {
+			stat, _ := os.Stdin.Stat()
+			if (stat.Mode() & os.ModeCharDevice) == 0 {
+				input, err := io.ReadAll(os.Stdin)
+				if err != nil {
+					fmt.Printf("读取标准输入失败: %v\n", err)
+					return
+				}
+				text = string(input)
 			}
 		}
 
-		// 3. 校验输入文本
-		if len(args) == 0 {
-			cmd.Help()
+		text = strings.TrimSpace(text)
+
+		if text == "" {
+			// 如果仅仅是切换模型，不显示帮助信息
+			if cmd.Flags().Changed("model") {
+				return
+			}
+			if err := cmd.Help(); err != nil {
+				fmt.Println(err)
+			}
+
 			return
 		}
-		text := strings.Join(args, " ")
 
 		// 4. 确定 Prompt
 		systemPrompt := PromptDefault
